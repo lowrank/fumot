@@ -14,10 +14,14 @@ classdef FUMOT < handle
     methods
         function obj = FUMOT(opt)
             assert(isfield(opt, 'femm_opt'));
+            assert(isfield(opt, 'gamma'));
+            assert(isfield(opt, 'beta'));
             
             obj.cache = struct('s',[], 'm', [], 'n', [], 'dof', [], 'ndof',[],...
                 'sx', [], 'mx', [], 'sm', [], 'mm', []); % cached variables
-            obj.parameter = struct('dX', [], 'aX', [], 'dM', [], 'aM', [], 'aF', [], 'eta', []);
+            obj.parameter = struct('dX', [], 'aX', [], 'dM', [], 'aM', [], ...
+                'aF', [], 'eta', [], 'gammaX', 0, 'gammaM', 0, 'betaX', 0, ...
+                'betaM', 0, 'betaF', 0);
             obj.source = struct('ex',[], 'em',[]); % emission source for auxillary function use
             obj.load = struct('ex', [], 'em',[]); 
             
@@ -36,6 +40,11 @@ classdef FUMOT < handle
             obj.parameter.dM = diffusionFM(obj.model.space.nodes)';
             obj.parameter.aX = absorptionFX(obj.model.space.nodes)';
             obj.parameter.aM = absorptionFM(obj.model.space.nodes)';
+            obj.parameter.gammaX = opt.gamma.X;
+            obj.parameter.gammaM = opt.gamma.M;
+            obj.parameter.betaX  = opt.beta.X;
+            obj.parameter.betaM  = opt.beta.M;
+            obj.parameter.betaF  = opt.beta.F;
             
             qdX = obj.mapping(obj.parameter.dX, obj.model.space.elems, obj.model.facet.ref');
             qdM = obj.mapping(obj.parameter.dM, obj.model.space.elems, obj.model.facet.ref');
@@ -70,7 +79,24 @@ classdef FUMOT < handle
 %             qeta= obj.mapping(p.eta, obj.model.space.elems, obj.model.facet.ref');
             
             A = obj.cache.sx + obj.cache.mx + obj.model.build('m', qaF);
-            % requires a gradient solver here. todo
+            u = obj.load.ex;
+            b = -A * u;
+            u(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ b(obj.cache.dof);
+            
+            [DX, DY] = obj.model.builder.reference_grad(obj.model.rffs.nodes);
+            [ux, uy] = obj.model.gradient(u, DX, DY);
+            % now ux, uy are close to the actual values. We randomly choose
+            % one for the gradient.
+            grad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                grad(obj.model.space.elems(:, i), 1) = ux(:, i);
+                grad(obj.model.space.elems(:, i), 2) = uy(:, i);
+            end
+            m = obj.parameter.gammaX * obj.parameter.dX .* (grad(:,2).^2 + grad(:,1).^2) +...
+                (obj.parameter.betaX * obj.parameter.aX +...
+                obj.parameter.betaF * obj.parameter.aF) .* (u.^2);
+            trisurf(obj.model.space.elems(1:3,:)', obj.model.space.nodes(1,:),...
+                obj.model.space.nodes(2,:), m);
             
         end
     end
