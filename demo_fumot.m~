@@ -1,5 +1,5 @@
 % clc; clear;
-N = 2^12 + 1; % disk, but requires sufficient regularity, larger the better.
+N = 2^1 + 1; % disk, but requires sufficient regularity, larger the better.
 theta = linspace(0, 2*pi, N);
 theta = theta(1:(N-1)) + pi/(N-1);
 nodes = [cos(theta); sin(theta)];

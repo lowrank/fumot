@@ -74,12 +74,15 @@ classdef FUMOT < handle
             
         end
         
-        function [Q , u] = forward_ex(obj, noise)
-            if nargin == 1
+        function [m , u] = forward_ex(obj, p, noise)
+            if nargin == 2
                 noise = 0;
             end
             
-            A = obj.cache.sx + obj.cache.mx + obj.cache.mf;
+            qaF = obj.mapping(p.aF,  obj.model.space.elems, obj.model.facet.ref');
+%             qeta= obj.mapping(p.eta, obj.model.space.elems, obj.model.facet.ref');
+            
+            A = obj.cache.sx + obj.cache.mx + obj;
             u = obj.load.ex;
             b = -A * u;
             u(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ b(obj.cache.dof);
@@ -93,15 +96,18 @@ classdef FUMOT < handle
                 grad(obj.model.space.elems(:, i), 1) = ux(:, i);
                 grad(obj.model.space.elems(:, i), 2) = uy(:, i);
             end
-            Q = obj.parameter.gammaX * obj.parameter.dX .* (grad(:,2).^2 + grad(:,1).^2) +...
+            m = obj.parameter.gammaX * obj.parameter.dX .* (grad(:,2).^2 + grad(:,1).^2) +...
                 (obj.parameter.betaX * obj.parameter.aX +...
                 obj.parameter.betaF * obj.parameter.aF) .* (u.^2);
             
-            Q = Q .* (1 + 0.5 * noise * (2 * rand(size(Q)) - 1)); % add noise
-
+            m = m .* (1 + 0.5 * noise * (2 * rand(size(m)) - 1)); % add noise
+            
+%             trisurf(obj.model.space.elems(1:3,:)', obj.model.space.nodes(1,:),...
+%                 obj.model.space.nodes(2,:), m);
+            
         end
         
-        function backward_ex_chk(obj, Q, u)
+        function backward_ex_chk(obj, m, u)
             assert(obj.parameter.betaF ~= 0); % special case I.
             tau = obj.parameter.gammaX / obj.parameter.betaF;
             mu = obj.parameter.betaX / obj.parameter.betaF - 1;
@@ -117,7 +123,7 @@ classdef FUMOT < handle
             a = (obj.parameter.dX).^(-tau);
             b =  (1 + tau) * a .* (lambda - 0.25 * tau * kappa - ...
                 mu * obj.parameter.aX./obj.parameter.dX);
-            c =  (1 + tau) * a .* Q./obj.parameter.betaF;
+            c =  (1 + tau) * a .* m./obj.parameter.betaF;
             
             % solve the nonlinear PDE. 
             % check first.
@@ -142,18 +148,10 @@ classdef FUMOT < handle
             
             v = L ./((sqrt(obj.parameter.dX) .* u).^(tau + 1));
             
-            assert(norm(v-1) /norm(v) < 1e-7);        
-        end
-        
-        function [u] = backward_ex(obj, Q)
-            % still needs theory to show this discretized nonlinear
-            % equation is solvable and matches the solution. Depends on
-            % what the paper is focusing on.
-            
+            assert(norm(v-1) /norm(v) < 1e-7);
+%            
         end
     end
-    
-    
     
     methods(Static)
         function [interpolate] = mapping(func, elems, trans_ref)
