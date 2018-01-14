@@ -170,6 +170,13 @@ classdef FUMOT < handle
             tqax = obj.mapping(b, obj.model.space.elems, obj.model.facet.ref');
             
             
+            % test b and c.
+            assert(all(b > 0));
+            theta = (tau - 1) / (tau + 1);
+            
+            assert(all(theta * c >= 0));
+            
+            
             tS = obj.model.build('s', tqdx);
             tM = obj.model.build('m', tqax);
             
@@ -190,7 +197,6 @@ classdef FUMOT < handle
                 tmp2 = obj.mapping(tmp, obj.model.space.elems, obj.model.facet.ref');
                 tM2 = obj.model.build('m', tmp2);
                 
-                
                 L = (sqrt(obj.parameter.dX) .* u).^(tau + 1);
                 L(obj.cache.dof) = 0;
                 A = tS + tM + tM2;
@@ -198,7 +204,7 @@ classdef FUMOT < handle
                 L(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
                  
                 v = (L).^(1/(1+tau))./sqrt(obj.parameter.dX);        
-                err = norm(u - v)
+                err = norm(u - v);
                 u = v;
             end                
             
@@ -218,6 +224,11 @@ classdef FUMOT < handle
             
 %             trisurf(obj.model.space.elems(1:3,:)', obj.model.space.nodes(1,:),...
 %                 obj.model.space.nodes(2,:),aF - obj.parameter.aF);
+        end
+        
+        function plot(obj, f)
+            trisurf(obj.model.space.elems(1:3,:)', obj.model.space.nodes(1,:),...
+                obj.model.space.nodes(2,:),f);
         end
     end
     
