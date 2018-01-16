@@ -145,7 +145,7 @@ classdef FUMOT < handle
             assert(norm(v-1) /norm(v) < 1e-7);        
         end
         
-        function [aF, u] = backward_ex(obj, Q)
+        function [aF, psi] = backward_ex(obj, Q)
             % still needs theory to show this discretized nonlinear
             % equation is solvable and matches the solution. Depends on
             % what the paper is focusing on.
@@ -172,9 +172,9 @@ classdef FUMOT < handle
             
             % test b and c.
             assert(all(b > 0));
-            theta = (tau - 1) / (tau + 1);
+            theta = (1 - tau) / (tau + 1);
             
-            assert(all(theta * c >= 0));
+            assert(all(theta * c <= 0));
             
             
             tS = obj.model.build('s', tqdx);
@@ -182,33 +182,46 @@ classdef FUMOT < handle
             
             % begin iteration. 
             % first, get initialized value for u.
-            u = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1);
-            u(obj.cache.dof) = 0;
+            psi = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1);
+            psi(obj.cache.dof) = 0;
             A = tS + tM;
-            rhs = -A * u;
-            u(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
+            rhs = -A * psi;
+            psi(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
             
-            u = (u).^(1/(1+tau)) ./sqrt(obj.parameter.dX);
-            
+            alpha = 0.99;
+            lambda = 1;
             err = 1e99;Iter = 0;
-            while (err > 1e-7)  
+            while (err > 1e-6)  
                 Iter = Iter + 1;
-                tmp = c.* u.^(-2) ./ obj.parameter.dX;
-                tmp2 = obj.mapping(tmp, obj.model.space.elems, obj.model.facet.ref');
+                tmp2 = obj.mapping(c, obj.model.space.elems, obj.model.facet.ref');
                 tM2 = obj.model.build('m', tmp2);
                 
-                L = (sqrt(obj.parameter.dX) .* u).^(tau + 1);
-                L(obj.cache.dof) = 0;
-                A = tS + tM + tM2;
-                rhs = -A * L;
-                L(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
-                 
-                v = (L).^(1/(1+tau))./sqrt(obj.parameter.dX);        
-                err = norm(u - v);
-                u = v;
+                A = tS + tM + sparse(1:obj.cache.n, 1:obj.cache.n, -theta * (psi).^(-theta-1)) * tM2;
+                F =( tS + tM ) * psi + tM2 * (psi).^(-theta);
+                delta = A(obj.cache.dof, obj.cache.dof) \ F(obj.cache.dof);
+                     
+                Ind = (delta > 0);
+                z = psi(obj.cache.dof);
+                if sum(Ind) 
+                    lambda = min(alpha * z(Ind)./delta(Ind));
+                    lambda = min(lambda, 1);
+                else
+                    lambda = 1;
+                end
+                psi(obj.cache.dof) = psi(obj.cache.dof) - lambda * delta;
+%                 psi = abs(psi); % ensure positivity??
+                
+                obj.plot(psi);
+                drawnow;
+                pause(2);
+                
+                err = norm(delta);
+                fprintf('\t %d \t err : %6.2e\n', Iter, err);
+
             end                
             
-                       
+            u = (psi).^(1/(tau+1))./(sqrt(obj.parameter.dX));
+             
             [DX, DY] = obj.model.builder.reference_grad(obj.model.rffs.nodes);
             [ux, uy] = obj.model.gradient(u, DX, DY);
             % now ux, uy are close to the actual values. We randomly choose
@@ -228,11 +241,9 @@ classdef FUMOT < handle
         
         function plot(obj, f)
             trisurf(obj.model.space.elems(1:3,:)', obj.model.space.nodes(1,:),...
-                obj.model.space.nodes(2,:),f);
+                obj.model.space.nodes(2,:),f, 'EdgeColor', 'None');shading interp; view(2);
         end
     end
-    
-    
     
     methods(Static)
         function [interpolate] = mapping(func, elems, trans_ref)
