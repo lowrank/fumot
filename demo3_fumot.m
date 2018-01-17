@@ -4,8 +4,8 @@ theta = linspace(0, 2*pi, N);
 theta = theta(1:(N-1)) + pi/(N-1);
 nodes = [cos(theta); sin(theta)];
 femm_opt = struct('deg', 4, 'qdeg', 6, 'min_area', 1e-3 ,'edge', nodes);
-gamma_opt = struct('X', 0.6, 'M', 0.6);
-beta_opt  = struct('X', -0.3, 'M', 0.7, 'F', -0.2); 
+gamma_opt = struct('X', 0.1, 'M', 0.6);
+beta_opt  = struct('X', 0.3, 'M', 0.7, 'F', -0.2); 
 
 % tau = gammaX / betaF, tau is not -1.
 % mu  = betaX/betaF - 1.
@@ -37,5 +37,6 @@ fmt.plot(aF);
 % 
 figure(2);
 fmt.plot(u);
+
 
 

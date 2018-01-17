@@ -189,16 +189,21 @@ classdef FUMOT < handle
             psi(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
             
             alpha = 0.99;
-            lambda = 1;
+            nu = 0.1;
+            kappa = 0.9;
             err = 1e99;Iter = 0;
-            while (err > 1e-6)  
+            while (err > 1e-12)  
+                if (Iter == 0)
+                    fprintf('\t Iteration \t stepSize \t error \n');
+                end
                 Iter = Iter + 1;
                 tmp2 = obj.mapping(c, obj.model.space.elems, obj.model.facet.ref');
                 tM2 = obj.model.build('m', tmp2);
                 
                 A = tS + tM + sparse(1:obj.cache.n, 1:obj.cache.n, -theta * (psi).^(-theta-1)) * tM2;
-                F =( tS + tM ) * psi + tM2 * (psi).^(-theta);
-                delta = A(obj.cache.dof, obj.cache.dof) \ F(obj.cache.dof);
+                F = @(X)(( tS + tM ) * X + tM2 * (X).^(-theta));
+                f = F(psi);
+                delta = A(obj.cache.dof, obj.cache.dof) \ f(obj.cache.dof);
                      
                 Ind = (delta > 0);
                 z = psi(obj.cache.dof);
@@ -208,15 +213,11 @@ classdef FUMOT < handle
                 else
                     lambda = 1;
                 end
+                
                 psi(obj.cache.dof) = psi(obj.cache.dof) - lambda * delta;
-%                 psi = abs(psi); % ensure positivity??
                 
-                obj.plot(psi);
-                drawnow;
-                pause(2);
-                
-                err = norm(delta);
-                fprintf('\t %d \t err : %6.2e\n', Iter, err);
+                err = norm(delta)/norm(psi(obj.cache.dof));
+                fprintf('\t %6d \t %6.2e\t %6.2e\n', Iter,lambda, err);
 
             end                
             
@@ -234,14 +235,20 @@ classdef FUMOT < handle
             aF = ((Q - obj.parameter.gammaX * obj.parameter.dX .* (grad(:,2).^2 + grad(:,1).^2))./(u.^2) -...
                 (obj.parameter.betaX * obj.parameter.aX))./obj.parameter.betaF;
           
-            
-%             trisurf(obj.model.space.elems(1:3,:)', obj.model.space.nodes(1,:),...
-%                 obj.model.space.nodes(2,:),aF - obj.parameter.aF);
+            % regularization ??
         end
         
         function plot(obj, f)
-            trisurf(obj.model.space.elems(1:3,:)', obj.model.space.nodes(1,:),...
-                obj.model.space.nodes(2,:),f, 'EdgeColor', 'None');shading interp; view(2);
+            % interpolation.
+            N = 500;
+            [X,Y] =meshgrid(linspace(-0.5,0.5, N));
+            X = X(:);
+            Y = Y(:);
+            F = scatteredInterpolant(obj.model.space.nodes(1,:)', ...
+                obj.model.space.nodes(2,:)', f);
+            G = F(X, Y);
+            surface(reshape(X, N,N), reshape(Y,N,N), reshape(G,N,N));
+            shading interp; view(2);colorbar;colormap jet;
         end
     end
     
