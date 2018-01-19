@@ -101,6 +101,141 @@ classdef FUMOT < handle
 
         end
         
+        
+        function S = forward_em(obj, u0, noise)
+            if nargin == 2
+                noise = 0;
+            end
+            
+            A = obj.cache.sm + obj.cache.mm;
+            w = zeros(obj.cache.n, 1);
+            l = obj.parameter.eta .* obj.parameter.aF .* u0; %load vector
+            ql = obj.mapping(l, obj.model.space.elems, obj.model.facet.ref');
+            tL = obj.model.build('l', ql);
+            b =  tL;
+            w(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ b(obj.cache.dof);
+            
+            [DX, DY] = obj.model.builder.reference_grad(obj.model.rffs.nodes);
+            [wx, wy] = obj.model.gradient(w, DX, DY);
+            % now ux, uy are close to the actual values. We randomly choose
+            % one for the gradient.
+            wgrad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                wgrad(obj.model.space.elems(:, i), 1) = wx(:, i);
+                wgrad(obj.model.space.elems(:, i), 2) = wy(:, i);
+            end
+            
+            v = obj.load.em;
+            v(obj.cache.dof) = 0;
+            b = -A * v;
+            v(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof)\ b(obj.cache.dof);
+            [vx, vy] = obj.model.gradient(v, DX, DY);
+            vgrad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                vgrad(obj.model.space.elems(:, i), 1) = vx(:, i);
+                vgrad(obj.model.space.elems(:, i), 2) = vy(:, i);
+            end
+            
+            C = obj.cache.sx + obj.cache.mx + obj.cache.mf;
+            cl = obj.parameter.eta .* obj.parameter.aF .* v;
+            qcl =  obj.mapping(cl, obj.model.space.elems, obj.model.facet.ref');
+            b = obj.model.build('l', qcl);
+            p = zeros(obj.cache.n, 1);
+            p(obj.cache.dof) = C(obj.cache.dof, obj.cache.dof)\ b(obj.cache.dof);
+            
+            [px, py] = obj.model.gradient(p, DX, DY);
+            pgrad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                pgrad(obj.model.space.elems(:, i), 1) = px(:, i);
+                pgrad(obj.model.space.elems(:, i), 2) = py(:, i);
+            end
+            
+            [ux, uy] = obj.model.gradient(u0, DX, DY);
+            % now ux, uy are close to the actual values. We randomly choose
+            % one for the gradient.
+            ugrad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                ugrad(obj.model.space.elems(:, i), 1) = ux(:, i);
+                ugrad(obj.model.space.elems(:, i), 2) = uy(:, i);
+            end
+            
+            S = obj.parameter.gammaM * obj.parameter.dM .* (wgrad(:,1).*vgrad(:,1) + wgrad(:,2) .* vgrad(:, 2)) ...
+                + obj.parameter.betaM * obj.parameter.aM .* w.*v ...
+                - obj.parameter.eta .* obj.parameter.aF .* u0 .* v ...
+                +obj.parameter.gammaX * obj.parameter.dX .* (ugrad(:,1) .* pgrad(:,1) + ugrad(:,2) .* pgrad(:,2)) ...
+                + (obj.parameter.betaX * obj.parameter.aX + obj.parameter.betaF * obj.parameter.aF) .* u0 .* p;
+            
+            S = S .*(1 + 0.5 * noise * (2 * rand(size(S)) - 1));
+            
+        end
+        
+        function S = forward_em_private(obj, maF, meta, u0)
+            A = obj.cache.sm + obj.cache.mm;
+            w = zeros(obj.cache.n, 1);
+            
+            l = meta .* maF .* u0; %load vector
+            
+            ql = obj.mapping(l, obj.model.space.elems, obj.model.facet.ref');
+            tL = obj.model.build('l', ql);
+            b =  tL;
+            w(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ b(obj.cache.dof);
+            
+            [DX, DY] = obj.model.builder.reference_grad(obj.model.rffs.nodes);
+            [wx, wy] = obj.model.gradient(w, DX, DY);
+            % now ux, uy are close to the actual values. We randomly choose
+            % one for the gradient.
+            wgrad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                wgrad(obj.model.space.elems(:, i), 1) = wx(:, i);
+                wgrad(obj.model.space.elems(:, i), 2) = wy(:, i);
+            end
+            
+            
+            v = obj.load.em;
+            v(obj.cache.dof) = 0;
+            b = -A * v;
+            v(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof)\ b(obj.cache.dof);
+            [vx, vy] = obj.model.gradient(v, DX, DY);
+            vgrad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                vgrad(obj.model.space.elems(:, i), 1) = vx(:, i);
+                vgrad(obj.model.space.elems(:, i), 2) = vy(:, i);
+            end
+            
+            
+            
+            C = obj.cache.sx + obj.cache.mx + obj.cache.mf;
+            cl = meta .* maF .* v;
+            qcl =  obj.mapping(cl, obj.model.space.elems, obj.model.facet.ref');
+            b = obj.model.build('l', qcl);
+            p = zeros(obj.cache.n, 1);
+            p(obj.cache.dof) = C(obj.cache.dof, obj.cache.dof)\ b(obj.cache.dof);
+            
+            [px, py] = obj.model.gradient(p, DX, DY);
+            pgrad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                pgrad(obj.model.space.elems(:, i), 1) = px(:, i);
+                pgrad(obj.model.space.elems(:, i), 2) = py(:, i);
+            end
+            
+            
+            [ux, uy] = obj.model.gradient(u0, DX, DY);
+            % now ux, uy are close to the actual values. We randomly choose
+            % one for the gradient.
+            ugrad = zeros(obj.cache.n, 2);
+            for i = 1:size(obj.model.space.elems, 2)
+                ugrad(obj.model.space.elems(:, i), 1) = ux(:, i);
+                ugrad(obj.model.space.elems(:, i), 2) = uy(:, i);
+            end
+            
+            S = obj.parameter.gammaM * obj.parameter.dM .* (wgrad(:,1).*vgrad(:,1) + wgrad(:,2) .* vgrad(:, 2)) ...
+                + obj.parameter.betaM * obj.parameter.aM .* w.*v ...
+                - meta .* maF .* u0 .* v ...
+                +obj.parameter.gammaX * obj.parameter.dX .* (ugrad(:,1) .* pgrad(:,1) + ugrad(:,2) .* pgrad(:,2)) ...
+                + (obj.parameter.betaX * obj.parameter.aX + obj.parameter.betaF * maF) .* u0 .* p;
+            
+        end
+        
         function backward_ex_chk(obj, Q, u)
             assert(obj.parameter.betaF ~= 0); % special case I.
             tau = obj.parameter.gammaX / obj.parameter.betaF;
@@ -145,7 +280,7 @@ classdef FUMOT < handle
             assert(norm(v-1) /norm(v) < 1e-7);        
         end
         
-        function [aF, psi] = backward_ex(obj, Q)
+        function [aF, u] = backward_ex(obj, Q)
             % still needs theory to show this discretized nonlinear
             % equation is solvable and matches the solution. Depends on
             % what the paper is focusing on.
@@ -187,7 +322,6 @@ classdef FUMOT < handle
             % first, get initialized value for u.
             psi = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
             psi(obj.cache.dof) = 0;
-            v = psi;
             % the initial guess!!
             if tau >= 1
                 A = tS + tM;
@@ -236,8 +370,8 @@ classdef FUMOT < handle
                     ld = obj.mapping(-c.*(psi.^(-theta) - nu *psi), obj.model.space.elems, obj.model.facet.ref');
                     LL = obj.model.build('l', ld);
                     
-%                     kappa = min(psi);
-%                     nu = -theta * kappa^(-(1+theta));
+                    kappa = min(psi);
+                    nu = -theta * kappa^(-(1+theta));
                     
                     B = tS + tM + nu * tN;
                     v = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
@@ -268,6 +402,11 @@ classdef FUMOT < handle
                 (obj.parameter.betaX * obj.parameter.aX))./obj.parameter.betaF;
           
             % regularization ??
+        end
+        
+        function [res,flag,relres,iter,resvec] = backward_em(obj, S, maF, u0)
+            ff = @(meta)(obj.forward_em_private(maF, meta, u0));
+            [res,flag,relres,iter,resvec] = gmres(ff, S, 20, 1e-5, 400);
         end
         
         function plot(obj, f)
