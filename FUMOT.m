@@ -180,44 +180,76 @@ classdef FUMOT < handle
             tS = obj.model.build('s', tqdx);
             tM = obj.model.build('m', tqax);
             
+            tqc = obj.mapping(c, obj.model.space.elems, obj.model.facet.ref');
+            tN = obj.model.build('m', tqc);
+            
             % begin iteration. 
             % first, get initialized value for u.
-            psi = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1);
+            psi = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
             psi(obj.cache.dof) = 0;
-            A = tS + tM;
-            rhs = -A * psi;
-            psi(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
+            v = psi;
+            % the initial guess!!
+            if tau >= 1
+                A = tS + tM;
+                rhs = -A * psi;
+                psi(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);  
+            elseif tau < -1
+                nu = max(psi);
+                nu = nu^(-(1+theta));
+                A = tS + tM + nu* tN;
+                rhs = -A * psi;
+                psi(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
+            else
+                A = tS + tM;
+                rhs = -A * psi;
+                psi(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);  
+                kappa = min(psi);
+                nu = -theta * kappa^(-(1+theta));
+            end
+
             
-            alpha = 0.99;
-            nu = 0.1;
-            kappa = 0.9;
             err = 1e99;Iter = 0;
             while (err > 1e-12)  
                 if (Iter == 0)
-                    fprintf('\t Iteration \t stepSize \t error \n');
+                    fprintf('\t Iteration \t error \n');
                 end
                 Iter = Iter + 1;
-                tmp2 = obj.mapping(c, obj.model.space.elems, obj.model.facet.ref');
-                tM2 = obj.model.build('m', tmp2);
-                
-                A = tS + tM + sparse(1:obj.cache.n, 1:obj.cache.n, -theta * (psi).^(-theta-1)) * tM2;
-                F = @(X)(( tS + tM ) * X + tM2 * (X).^(-theta));
-                f = F(psi);
-                delta = A(obj.cache.dof, obj.cache.dof) \ f(obj.cache.dof);
-                     
-                Ind = (delta > 0);
-                z = psi(obj.cache.dof);
-                if sum(Ind) 
-                    lambda = min(alpha * z(Ind)./delta(Ind));
-                    lambda = min(lambda, 1);
+
+                if (tau >= 1)
+                    tqcp = obj.mapping(c.*(psi).^(-(1+theta)), obj.model.space.elems, obj.model.facet.ref');
+                    tL = obj.model.build('m', tqcp);
+                    B = tS + tM + tL;
+                    v = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
+                    v(obj.cache.dof) = 0;
+           
+                    RHS = -B * v;
+                    v(obj.cache.dof) = B(obj.cache.dof, obj.cache.dof)\ RHS(obj.cache.dof);
+                elseif (tau < -1)
+                    ld = obj.mapping(-c.*(psi.^(-theta) - nu *psi), obj.model.space.elems, obj.model.facet.ref');
+                    LL = obj.model.build('l', ld);
+                    B = tS + tM + nu * tN;
+                    v = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
+                    v(obj.cache.dof) = 0;
+                    RHS = -B * v + LL;
+                    v(obj.cache.dof) = B(obj.cache.dof, obj.cache.dof) \ RHS(obj.cache.dof);
                 else
-                    lambda = 1;
+                    ld = obj.mapping(-c.*(psi.^(-theta) - nu *psi), obj.model.space.elems, obj.model.facet.ref');
+                    LL = obj.model.build('l', ld);
+                    
+%                     kappa = min(psi);
+%                     nu = -theta * kappa^(-(1+theta));
+                    
+                    B = tS + tM + nu * tN;
+                    v = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
+                    v(obj.cache.dof) = 0;
+                    RHS = -B * v + LL;
+                    v(obj.cache.dof) = B(obj.cache.dof, obj.cache.dof) \ RHS(obj.cache.dof);  
                 end
                 
-                psi(obj.cache.dof) = psi(obj.cache.dof) - lambda * delta;
-                
-                err = norm(delta)/norm(psi(obj.cache.dof));
-                fprintf('\t %6d \t %6.2e\t %6.2e\n', Iter,lambda, err);
+                delta = psi - v;
+                err = norm(delta)/norm(psi);
+                psi = v;
+                fprintf('\t %6d  \t %6.2e\n', Iter, err);
 
             end                
             

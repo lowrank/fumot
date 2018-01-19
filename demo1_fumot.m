@@ -16,7 +16,7 @@ fprintf('mu is %6.2e.\n', beta_opt.X / beta_opt.F - 1);
 opt = struct('femm_opt', femm_opt, 'reg', 1e-4, 'gamma', gamma_opt, 'beta', beta_opt);
 fmt = FUMOT(opt);
 %% add some noise.
-tic;[Q, ex_sol] = fmt.forward_ex(0.05);toc;
+tic;[Q, ex_sol] = fmt.forward_ex(0.00);toc;
 
 %%
 % fmt.backward_ex_chk(Q, ex_sol);
