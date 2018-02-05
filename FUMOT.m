@@ -170,6 +170,7 @@ classdef FUMOT < handle
         end
         
         function S = forward_em_private(obj, maF, meta, u0)
+            tic;
             A = obj.cache.sm + obj.cache.mm;
             w = zeros(obj.cache.n, 1);
             
@@ -233,7 +234,7 @@ classdef FUMOT < handle
                 - meta .* maF .* u0 .* v ...
                 +obj.parameter.gammaX * obj.parameter.dX .* (ugrad(:,1) .* pgrad(:,1) + ugrad(:,2) .* pgrad(:,2)) ...
                 + (obj.parameter.betaX * obj.parameter.aX + obj.parameter.betaF * maF) .* u0 .* p;
-            
+            toc;
         end
         
         function backward_ex_chk(obj, Q, u)
@@ -406,7 +407,7 @@ classdef FUMOT < handle
         
         function [res,flag,relres,iter,resvec] = backward_em(obj, S, maF, u0)
             ff = @(meta)(obj.forward_em_private(maF, meta, u0));
-            [res,flag,relres,iter,resvec] = gmres(ff, S, 20, 1e-5, 400);
+            [res,flag,relres,iter,resvec] = gmres(ff, S, 10, 1e-5, 5);
         end
         
         function plot(obj, f)
