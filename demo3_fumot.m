@@ -16,8 +16,8 @@ fprintf('mu is %6.2e.\n', beta_opt.X / beta_opt.F - 1);
 opt = struct('femm_opt', femm_opt, 'reg', 1e-4, 'gamma', gamma_opt, 'beta', beta_opt);
 fmt = FUMOT(opt);
 %% add some noise.
-tic;[Q, u0] = fmt.forward_ex(0.02);toc;
-tic;[S] = fmt.forward_em(u0, 0.02);toc;
+tic;[Q, u0] = fmt.forward_ex(0.00);toc;
+tic;[S] = fmt.forward_em(u0, 0.00);toc;
 % fmt.backward_ex_chk(Q, u0);
 
 %% get absorption coefficient for fluoresence.
