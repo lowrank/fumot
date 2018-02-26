@@ -243,42 +243,44 @@ classdef FUMOT < handle
             mu = obj.parameter.betaX / obj.parameter.betaF - 1;
             assert(tau + 1 ~= 0); % special case II.
 
-            LapSqrtDx = LaplaceSqrtDiffusionFX(obj.model.space.nodes)';
-            lambda = LapSqrtDx ./ sqrt(obj.parameter.dX);
+%             LapSqrtDx = LaplaceSqrtDiffusionFX(obj.model.space.nodes)';
+%             lambda = LapSqrtDx ./ sqrt(obj.parameter.dX);
+%             
+%             NGradDx = NormedGradientDiffusionFX(obj.model.space.nodes)';
+%             kappa  = (NGradDx ./ obj.parameter.dX).^2;
             
-            NGradDx = NormedGradientDiffusionFX(obj.model.space.nodes)';
-            kappa  = (NGradDx ./ obj.parameter.dX).^2;
             
-            
-            a = (obj.parameter.dX).^(-tau);
-            b =  (1 + tau) * a .* (lambda - 0.25 * tau * kappa - ...
-                mu * obj.parameter.aX./obj.parameter.dX);
-            c =  (1 + tau) * a .* Q./obj.parameter.betaF;
+%             a = (obj.parameter.dX).^(-tau);
+            a = (obj.parameter.dX);
+%             b =  (1 + tau) * a .* (lambda - 0.25 * tau * kappa - ...
+%                 mu * obj.parameter.aX./obj.parameter.dX);
+            b = -(1 + tau) * mu * obj.parameter.aX;
+            c =  (1 + tau) * Q./obj.parameter.betaF;
             
             % solve the nonlinear PDE. 
             % check first.
             tqdx = obj.mapping(a, obj.model.space.elems, obj.model.facet.ref');
             tqax = obj.mapping(b, obj.model.space.elems, obj.model.facet.ref');
             
-            tmp = c.* u.^(-2) ./ obj.parameter.dX;
+            tmp = c.* u.^(-2);
             tmp2 = obj.mapping(tmp, obj.model.space.elems, obj.model.facet.ref');
             
             tS = obj.model.build('s', tqdx);
             tM = obj.model.build('m', tqax);
             tM2 = obj.model.build('m', tmp2);
             
-            L = (sqrt(obj.parameter.dX) .* u).^(tau + 1);
+            L = (u).^(tau + 1);
             L(obj.cache.dof) = 0;
             A = tS + tM + tM2;
             rhs = -A * L;
             L(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
             
             trisurf(obj.model.space.elems(1:3,:)', obj.model.space.nodes(1,:),...
-                obj.model.space.nodes(2,:),L ./((sqrt(obj.parameter.dX) .* u).^(tau + 1)));
+                obj.model.space.nodes(2,:),L ./((u).^(tau + 1)));
             
-            v = L ./((sqrt(obj.parameter.dX) .* u).^(tau + 1));
+            v = L ./(u).^(tau + 1);
             
-            assert(norm(v-1) /norm(v) < 1e-7);        
+            assert(norm(v-1) /norm(v) < 1e-7);      
         end
         
         function [aF, u] = backward_ex(obj, Q)
@@ -290,17 +292,19 @@ classdef FUMOT < handle
             mu = obj.parameter.betaX / obj.parameter.betaF - 1;
             assert(tau + 1 ~= 0); % special case II.
 
-            LapSqrtDx = LaplaceSqrtDiffusionFX(obj.model.space.nodes)';
-            lambda = LapSqrtDx ./ sqrt(obj.parameter.dX);
+%             LapSqrtDx = LaplaceSqrtDiffusionFX(obj.model.space.nodes)';
+%             lambda = LapSqrtDx ./ sqrt(obj.parameter.dX);
+%             
+%             NGradDx = NormedGradientDiffusionFX(obj.model.space.nodes)';
+%             kappa  = (NGradDx ./ obj.parameter.dX).^2;
             
-            NGradDx = NormedGradientDiffusionFX(obj.model.space.nodes)';
-            kappa  = (NGradDx ./ obj.parameter.dX).^2;
             
-            
-            a = (obj.parameter.dX).^(-tau);
-            b =  (1 + tau) * a .* (lambda - 0.25 * tau * kappa - ...
-                mu * obj.parameter.aX./obj.parameter.dX);
-            c =  (1 + tau) * a .* Q./obj.parameter.betaF;
+%             a = (obj.parameter.dX).^(-tau);
+            a = (obj.parameter.dX);
+%             b =  (1 + tau) * a .* (lambda - 0.25 * tau * kappa - ...
+%                 mu * obj.parameter.aX./obj.parameter.dX);
+            b = -(1 + tau) * mu * obj.parameter.aX;
+            c =  (1 + tau) * Q./obj.parameter.betaF;
             
             tqdx = obj.mapping(a, obj.model.space.elems, obj.model.facet.ref');
             tqax = obj.mapping(b, obj.model.space.elems, obj.model.facet.ref');
@@ -321,7 +325,7 @@ classdef FUMOT < handle
             
             % begin iteration. 
             % first, get initialized value for u.
-            psi = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
+            psi = (obj.load.ex).^(tau + 1); % boundary does not change.
             psi(obj.cache.dof) = 0;
             % the initial guess!!
             if tau >= 1
@@ -330,7 +334,7 @@ classdef FUMOT < handle
                 psi(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);  
             elseif tau < -1
                 nu = max(psi);
-                nu = nu^(-(1+theta));
+                nu = -theta * nu^(-(1+theta));
                 A = tS + tM + nu* tN;
                 rhs = -A * psi;
                 psi(obj.cache.dof) = A(obj.cache.dof, obj.cache.dof) \ rhs(obj.cache.dof);
@@ -354,7 +358,7 @@ classdef FUMOT < handle
                     tqcp = obj.mapping(c.*(psi).^(-(1+theta)), obj.model.space.elems, obj.model.facet.ref');
                     tL = obj.model.build('m', tqcp);
                     B = tS + tM + tL;
-                    v = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
+                    v = (obj.load.ex).^(tau + 1); % boundary does not change.
                     v(obj.cache.dof) = 0;
            
                     RHS = -B * v;
@@ -363,7 +367,7 @@ classdef FUMOT < handle
                     ld = obj.mapping(-c.*(psi.^(-theta) - nu *psi), obj.model.space.elems, obj.model.facet.ref');
                     LL = obj.model.build('l', ld);
                     B = tS + tM + nu * tN;
-                    v = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
+                    v = (obj.load.ex).^(tau + 1); % boundary does not change.
                     v(obj.cache.dof) = 0;
                     RHS = -B * v + LL;
                     v(obj.cache.dof) = B(obj.cache.dof, obj.cache.dof) \ RHS(obj.cache.dof);
@@ -375,7 +379,7 @@ classdef FUMOT < handle
                     nu = -theta * kappa^(-(1+theta));
                     
                     B = tS + tM + nu * tN;
-                    v = (sqrt(obj.parameter.dX) .* obj.load.ex).^(tau + 1); % boundary does not change.
+                    v = (obj.load.ex).^(tau + 1); % boundary does not change.
                     v(obj.cache.dof) = 0;
                     RHS = -B * v + LL;
                     v(obj.cache.dof) = B(obj.cache.dof, obj.cache.dof) \ RHS(obj.cache.dof);  
@@ -388,7 +392,8 @@ classdef FUMOT < handle
 
             end                
             
-            u = (psi).^(1/(tau+1))./(sqrt(obj.parameter.dX));
+%             u = (psi).^(1/(tau+1))./(sqrt(obj.parameter.dX));
+            u = (psi).^(1/(tau+1));
              
             [DX, DY] = obj.model.builder.reference_grad(obj.model.rffs.nodes);
             [ux, uy] = obj.model.gradient(u, DX, DY);
